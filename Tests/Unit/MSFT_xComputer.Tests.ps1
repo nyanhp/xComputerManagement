@@ -43,11 +43,13 @@ try
                 It 'Should return True if Domain name is same as specified' {
                     Mock Get-WMIObject {[PSCustomObject]@{Domain = 'Contoso.com';Workgroup='Contoso.com';PartOfDomain=$true}}
                     Mock GetComputerDomain {'contoso.com'}
+                    Mock Get-ComputerOU {"someOu"}
                     Test-TargetResource -Name $Env:ComputerName -DomainName 'Contoso.com' -Credential $Credential | Should Be $true
                 }
                 It 'Should return True if Workgroup name is same as specified' {
                     Mock Get-WMIObject {[PSCustomObject]@{Domain = 'Workgroup';Workgroup='Workgroup';PartOfDomain=$false}}
                     Mock GetComputerDomain {''}
+                    Mock Get-ComputerOU {"someOu"}
                     Test-TargetResource -Name $Env:ComputerName -WorkGroupName 'workgroup' | Should Be $true
                 }
                 It 'Should return True if ComputerName and Domain name is same as specified' {
@@ -127,10 +129,10 @@ try
                 It 'should not throw' {
                     {Get-TargetResource -Name $env:COMPUTERNAME} | Should Not Throw
                 }
-                It 'Should return a hashtable containing Name, DomainName, JoinOU, CurrentOU, Credential, UnjoinCredential and WorkGroupName' {
+                It 'Should return a hashtable containing Name, DomainName, Description, JoinOU, CurrentOU, Credential, UnjoinCredential and WorkGroupName' {
                     $Result = Get-TargetResource -Name $env:COMPUTERNAME
                     $Result.GetType().Fullname | Should Be 'System.Collections.Hashtable'
-                    $Result.Keys | Should Be @('Name', 'DomainName', 'JoinOU', 'CurrentOU', 'Credential', 'UnjoinCredential', 'WorkGroupName')
+                    $Result.Keys | Sort-Object | Should Be @('Credential', 'CurrentOU','Description', 'DomainName', 'JoinOU', 'Name',  'UnjoinCredential', 'WorkGroupName')
                 }
                 It 'Throws if name is to long' {
                     {Get-TargetResource -Name "ThisNameIsTooLong"} | Should Throw
