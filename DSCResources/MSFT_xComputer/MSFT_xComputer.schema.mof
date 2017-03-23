@@ -8,5 +8,5 @@ class MSFT_xComputer : OMI_BaseResource
     [Write,EmbeddedInstance("MSFT_Credential"), Description("The credential used to join to a domain")] String Credential;
     [Write,EmbeddedInstance("MSFT_Credential"), Description("The credential used to unjoin a domain")] String UnjoinCredential;
     [Write, Description("The local work group name")] string WorkGroupName;
-    [Write, Description("The computer description that will be set in Active Directory and locally")] String Description;
+    [Write, Description("The computer description that will be set locally. If PsDscRunAsCredential is used, the description will also be set in Active Directory.")] String Description;
 };
