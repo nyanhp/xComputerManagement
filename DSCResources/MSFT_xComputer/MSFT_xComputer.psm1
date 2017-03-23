@@ -9,26 +9,32 @@ function Get-TargetResource
     param
     (
         [parameter(Mandatory)]
-        [ValidateLength(1,15)]
-        [ValidateScript({$_ -inotmatch'[\/\\:*?"<>|]' })]
+        [ValidateLength(1, 15)]
+        [ValidateScript( {$_ -inotmatch '[\/\\:*?"<>|]' })]
         [string]
         $Name,
-
+    
         [string]
         $DomainName,
 
         [string]
         $JoinOU,
-
+        
         [PSCredential]
         $Credential,
 
         [PSCredential]
-        $UnjoinCredential
+        $UnjoinCredential,
+
+        [string]
+        $WorkGroupName,
+
+        [string]
+        $Description
     )
 
-    $convertToCimCredential = New-CimInstance -ClassName MSFT_Credential -Property @{Username=[string]$Credential.UserName; Password=[string]$null} -Namespace root/microsoft/windows/desiredstateconfiguration -ClientOnly
-    $convertToCimUnjoinCredential = New-CimInstance -ClassName MSFT_Credential -Property @{Username=[string]$UnjoinCredential.UserName; Password=[string]$null} -Namespace root/microsoft/windows/desiredstateconfiguration -ClientOnly
+    $convertToCimCredential = New-CimInstance -ClassName MSFT_Credential -Property @{Username = [string]$Credential.UserName; Password = [string]$null} -Namespace root/microsoft/windows/desiredstateconfiguration -ClientOnly
+    $convertToCimUnjoinCredential = New-CimInstance -ClassName MSFT_Credential -Property @{Username = [string]$UnjoinCredential.UserName; Password = [string]$null} -Namespace root/microsoft/windows/desiredstateconfiguration -ClientOnly
 
     $returnValue = @{
         Name = $env:COMPUTERNAME
@@ -37,8 +43,8 @@ function Get-TargetResource
         CurrentOU = Get-ComputerOU
         Credential = [ciminstance]$convertToCimCredential
         UnjoinCredential = [ciminstance]$convertToCimUnjoinCredential
-        WorkGroupName= (Get-WmiObject -Class WIN32_ComputerSystem).WorkGroup
-        Description = (Get-WmiObject -Class WIN32_OperatingSystem).Description
+        WorkGroupName = (Get-WmiObject -Class WIN32_ComputerSystem).WorkGroup
+        Description = (Get-CimInstance -ClassName WIN32_OperatingSystem).Description
     }
 
     $returnValue
@@ -49,8 +55,8 @@ function Set-TargetResource
     param
     (
         [parameter(Mandatory)]
-        [ValidateLength(1,15)]
-        [ValidateScript({$_ -inotmatch'[\/\\:*?"<>|]' })]
+        [ValidateLength(1, 15)]
+        [ValidateScript( {$_ -inotmatch '[\/\\:*?"<>|]' })]
         [string]
         $Name,
     
@@ -133,12 +139,31 @@ function Set-TargetResource
                     Write-Verbose -Message "Added computer to domain '$($DomainName)."
                 }
             }
+
+            if (-not [string]::IsNullOrWhiteSpace($Description) -and $PSBoundParameters.ContainsKey('PsDscRunAsCredential'))
+            {
+                # Set description in Active Directory
+                $domain = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().GetDirectoryEntry()
+                $searcher = [System.DirectoryServices.DirectorySearcher] $domain
+
+                # Set the search filter to an LDAP query for this machine's computer name
+                $searcher.Filter = "(sAMAccountName=$Name`$)"            
+                $results = $searcher.FindAll()
+
+                $result = $results | Select-Object -First 1
+                if ($result.Properties.Contains('description'))
+                {
+                    $null = $result.Properties['Description'].Add($Description)
+                    $null = $result.CommitChanges()
+                    Write-Verbose -Message "Successfully set description of computer object to $Description"
+                }
+            }
         }
         elseif ($WorkGroupName) 
         {
-            if($WorkGroupName -eq (Get-WmiObject -Class win32_computersystem).WorkGroup) 
+            if ($WorkGroupName -eq (Get-WmiObject -Class win32_computersystem).WorkGroup) 
             {
-                # Rename the comptuer, but stay in the same workgroup.
+                # Rename the computer, but stay in the same workgroup.
                 Rename-Computer -NewName $Name
                 Write-Verbose -Message "Renamed computer to '$($Name)'."
             }
@@ -158,7 +183,7 @@ function Set-TargetResource
                 }
             }
         }
-        elseif($Name -ne $env:COMPUTERNAME) 
+        elseif ($Name -ne $env:COMPUTERNAME) 
         {
             if (GetComputerDomain) 
             {
@@ -204,7 +229,7 @@ function Set-TargetResource
         }
         if ($name -ne $env:COMPUTERNAME)
         {
-            $addParameters.Add('NewName',$Name)
+            $addParameters.Add('NewName', $Name)
         }
 
         Add-Computer @addParameters
@@ -212,6 +237,13 @@ function Set-TargetResource
         Write-Verbose -Message "'$($Name)' added to workgroup '$($WorkGroupName)'."
         $global:DSCMachineStatus = 1
         return        
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($Description))
+    {
+        Get-CimInstance -ClassName Win32_OperatingSystem | Set-CimInstance -Property @{
+            'Description' = $Description;
+        }
     }
 
     $global:DSCMachineStatus = 1
@@ -224,31 +256,53 @@ function Test-TargetResource
     param
     (
         [parameter(Mandatory)]
-        [ValidateLength(1,15)]
-        [ValidateScript({$_ -inotmatch'[\/\\:*?"<>|]' })]
-        [string] $Name,
+        [ValidateLength(1, 15)]
+        [ValidateScript( {$_ -inotmatch '[\/\\:*?"<>|]' })]
+        [string]
+        $Name,
+    
+        [string]
+        $DomainName,
 
-        [string] $JoinOU,
+        [string]
+        $JoinOU,
         
-        [PSCredential]$Credential,
+        [PSCredential]
+        $Credential,
 
-        [PSCredential]$UnjoinCredential,
-        
-        [string] $DomainName,
+        [PSCredential]
+        $UnjoinCredential,
 
-        [string] $WorkGroupName
+        [string]
+        $WorkGroupName,
+
+        [string]
+        $Description
     )
     
+    Write-Verbose -Message 'Getting current values'
+    $currentValues = Get-TargetResource @PSBoundParameters
+
+    if ($null -eq $currentValues)
+    {
+        return $false
+    }
+
     Write-Verbose -Message "Validate desired Name is a valid name"
     
     Write-Verbose -Message "Checking if computer name is correct"
-    if (($Name -ne 'localhost') -and ($Name -ne $env:COMPUTERNAME)) {return $false}
+    if (($Name -ne 'localhost') -and ($Name -ne $currentValues.Name)) {return $false}
+
+    if ($PSBoundParameters.ContainsKey('Description') -and $currentValues.Description -ne $Description)
+    {
+        return $false
+    }
 
     ValidateDomainOrWorkGroup -DomainName $DomainName -WorkGroupName $WorkGroupName
 
-    if($DomainName)
+    if ($DomainName)
     {
-        if(!($Credential))
+        if (!($Credential))
         {
             throw "Need to specify credentials with domain"
         }
@@ -256,7 +310,7 @@ function Test-TargetResource
         try
         {
             Write-Verbose "Checking if the machine is a member of $DomainName."
-            return ($DomainName.ToLower() -eq (GetComputerDomain).ToLower())
+            return ($DomainName.ToLower() -eq $currentValues.DomainName.ToLower())
         }
         catch
         {
@@ -264,10 +318,10 @@ function Test-TargetResource
             return $false
         }
     }
-    elseif($WorkGroupName)
+    elseif ($WorkGroupName)
     {
         Write-Verbose -Message "Checking if workgroup name is $WorkGroupName"
-        return ($WorkGroupName -eq (Get-WmiObject -Class WIN32_ComputerSystem).WorkGroup)
+        return ($WorkGroupName -eq $currentValues.WorkGroupName)
     }
     else
     {
