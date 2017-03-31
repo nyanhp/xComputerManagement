@@ -238,7 +238,7 @@ function Set-TargetResource
         throw "Missing domain join credentials."
     }
 
-    if (-not $WorkGroupName -or $WorkGroupName -eq (Get-WmiObject -Class win32_computersystem).Workgroup())
+    if (-not $WorkGroupName -or $WorkGroupName -eq (Get-WmiObject -Class win32_computersystem).Workgroup)
     {
         if ($Name -ne $env:COMPUTERNAME)
         {
