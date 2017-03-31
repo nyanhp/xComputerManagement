@@ -340,12 +340,12 @@ function Test-TargetResource
         
         try
         {
-            Write-Verbose "Checking if the machine is a member of $DomainName."
+            Write-Verbose -Message "Checking if the machine is a member of $DomainName."
             return ($DomainName.ToLower() -eq $currentValues.DomainName.ToLower())
         }
         catch
         {
-            Write-Verbose 'The machine is not a domain member.'
+            Write-Verbose -Message 'The machine is not a domain member.'
             return $false
         }
     }
@@ -377,7 +377,7 @@ function GetComputerDomain
     }
     catch [System.Management.Automation.MethodInvocationException]
     {
-        Write-Debug 'This machine is not a domain member.'
+        Write-Debug -Message 'This machine is not a domain member.'
     }
 }
 
