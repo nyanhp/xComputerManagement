@@ -95,41 +95,48 @@ function Set-TargetResource
                 # Rename the computer, but stay joined to the domain.
                 Rename-Computer -NewName $Name -DomainCredential $Credential -Force
                 Write-Verbose -Message "Renamed computer to '$($Name)'."
+
+                if (-not [string]::IsNullOrWhiteSpace($Description))
+                {
+                    Get-CimInstance -ClassName Win32_OperatingSystem | Set-CimInstance -Property @{
+                        'Description' = $Description;
+                    }
+                }
+                return
+            }
+            
+            # Rename the computer, and join it to the domain.
+            $parameterSet = @{
+                DomainName = $DomainName
+                Credential = $Credential                        
+                Force = $true
+            }
+
+            if ($Name -ne $env:COMPUTERNAME) 
+            {
+                $parameterSet.Add('NewName', $Name)
+            }
+                        
+            if ($UnjoinCredential) 
+            {
+                $parameterSet.Add('UnjoinDomainCredential', $UnjoinCredential)
+            }
+
+            if ($JoinOU)
+            {
+                $parameterSet.Add('OUPath', $JoinOU)
+            }
+                    
+            Add-Computer @parameterSet
+            if ($Name -ne $env:COMPUTERNAME) 
+            {
+                Write-Verbose -Message "Renamed computer to '$($Name)' and added to the domain '$($DomainName)."
             }
             else 
             {
-                # Rename the computer, and join it to the domain.
-                $parameterSet = @{
-                    DomainName = $DomainName
-                    Credential = $Credential                        
-                    Force = $true
-                }
-
-                if ($Name -ne $env:COMPUTERNAME) 
-                {
-                    $parameterSet.Add('NewName', $Name)
-                }
-                        
-                if ($UnjoinCredential) 
-                {
-                    $parameterSet.Add('UnjoinDomainCredential', $UnjoinCredential)
-                }
-
-                if ($JoinOU)
-                {
-                    $parameterSet.Add('OUPath', $JoinOU)
-                }
-                    
-                Add-Computer @parameterSet
-                if ($Name -ne $env:COMPUTERNAME) 
-                {
-                    Write-Verbose -Message "Renamed computer to '$($Name)' and added to the domain '$($DomainName)."
-                }
-                else 
-                {
-                    Write-Verbose -Message "Joined computer '$Name' to the domain '$DomainName"
-                }            
-            }
+                Write-Verbose -Message "Joined computer '$Name' to the domain '$DomainName"
+            }            
+            
 
             if (-not [string]::IsNullOrWhiteSpace($Description) -and $PSBoundParameters.ContainsKey('PsDscRunAsCredential'))
             {
@@ -149,6 +156,15 @@ function Set-TargetResource
                     Write-Verbose -Message "Successfully set description of computer object to $Description"
                 }
             }
+
+            if (-not [string]::IsNullOrWhiteSpace($Description))
+            {
+                Get-CimInstance -ClassName Win32_OperatingSystem | Set-CimInstance -Property @{
+                    'Description' = $Description;
+                }
+            }
+
+            return
         }
         elseif ($WorkGroupName) 
         {
@@ -157,6 +173,15 @@ function Set-TargetResource
                 # Rename the computer, but stay in the same workgroup.
                 Rename-Computer -NewName $Name
                 Write-Verbose -Message "Renamed computer to '$($Name)'."
+
+                if (-not [string]::IsNullOrWhiteSpace($Description))
+                {
+                    Get-CimInstance -ClassName Win32_OperatingSystem | Set-CimInstance -Property @{
+                        'Description' = $Description;
+                    }
+                }
+            
+                return
             }
             else 
             {
@@ -174,65 +199,76 @@ function Set-TargetResource
                 # Same computer name, and join it to the workgroup.
                 Add-Computer @parameterSet
                 Write-Verbose -Message "Added computer to workgroup '$($WorkGroupName)'."
-            }
-        }
-        elseif ($Name -ne $env:COMPUTERNAME) 
-        {
-            $parameterSet = @{
-                NewName = $Name
-                Force = $true
-            }
 
-            if (GetComputerDomain) 
-            {
-                $parameterSet.Add('DomainCredential', $Credential)
-            }
+                if (-not [string]::IsNullOrWhiteSpace($Description))
+                {
+                    Get-CimInstance -ClassName Win32_OperatingSystem | Set-CimInstance -Property @{
+                        'Description' = $Description;
+                    }
+                }
             
-            Rename-Computer -NewName $Name -Force
-            Write-Verbose -Message "Renamed computer to '$($Name)'."
-        }
-    }
-    else 
-    {
-        if ($DomainName) 
-        {
-            throw "Missing domain join credentials."
-        }
-
-        if (-not $WorkGroupName)
-        {
-            if ($Name -ne $env:COMPUTERNAME)
-            {
-                Rename-Computer -NewName $Name
-                Write-Verbose -Message "Renamed computer to '$($Name)'."
-                $global:DSCMachineStatus = 1
+                return
             }
-            return
         }
         
-        if ($WorkGroupName -eq (Get-WmiObject -Class win32_computersystem).Workgroup)
+        $parameterSet = @{
+            NewName = $Name
+            Force = $true
+        }
+
+        if (GetComputerDomain) 
         {
-            # Same workgroup, new computer name
-            Rename-Computer -NewName $Name -force
+            $parameterSet.Add('DomainCredential', $Credential)
+        }
+            
+        Rename-Computer -NewName $Name -Force
+        Write-Verbose -Message "Renamed computer to '$($Name)'."
+        if (-not [string]::IsNullOrWhiteSpace($Description))
+        {
+            Get-CimInstance -ClassName Win32_OperatingSystem | Set-CimInstance -Property @{
+                'Description' = $Description;
+            }
+        }
+            
+        return
+    }
+
+    if ($DomainName) 
+    {
+        throw "Missing domain join credentials."
+    }
+
+    if (-not $WorkGroupName -or $WorkGroupName -eq (Get-WmiObject -Class win32_computersystem).Workgroup())
+    {
+        if ($Name -ne $env:COMPUTERNAME)
+        {
+            Rename-Computer -NewName $Name
             Write-Verbose -Message "Renamed computer to '$($Name)'."
             $global:DSCMachineStatus = 1
-            return
         }
-        
-        $addParameters = @{
-            WorkGroupName = $WorkGroupName
-        }
-        if ($name -ne $env:COMPUTERNAME)
+
+        if (-not [string]::IsNullOrWhiteSpace($Description))
         {
-            $addParameters.Add('NewName', $Name)
+            Get-CimInstance -ClassName Win32_OperatingSystem | Set-CimInstance -Property @{
+                'Description' = $Description;
+            }
         }
 
-        Add-Computer @addParameters
-
-        Write-Verbose -Message "'$($Name)' added to workgroup '$($WorkGroupName)'."
-        $global:DSCMachineStatus = 1
-        return        
+        return
     }
+        
+    $addParameters = @{
+        WorkGroupName = $WorkGroupName
+    }
+
+    if ($name -ne $env:COMPUTERNAME)
+    {
+        $addParameters.Add('NewName', $Name)
+    }
+
+    Add-Computer @addParameters
+
+    Write-Verbose -Message "'$($Name)' added to workgroup '$($WorkGroupName)'."
 
     if (-not [string]::IsNullOrWhiteSpace($Description))
     {
@@ -240,7 +276,7 @@ function Set-TargetResource
             'Description' = $Description;
         }
     }
-
+            
     $global:DSCMachineStatus = 1
 }
 
