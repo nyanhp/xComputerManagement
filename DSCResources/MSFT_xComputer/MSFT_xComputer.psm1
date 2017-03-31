@@ -98,46 +98,37 @@ function Set-TargetResource
             }
             else 
             {
+                # Rename the computer, and join it to the domain.
+                $parameterSet = @{
+                    DomainName = $DomainName
+                    Credential = $Credential                        
+                    Force = $true
+                }
+
                 if ($Name -ne $env:COMPUTERNAME) 
                 {
-                    # Rename the comptuer, and join it to the domain.
-                    if ($UnjoinCredential) 
-                    {
-                        Add-Computer -DomainName $DomainName -Credential $Credential -NewName $Name -UnjoinDomainCredential $UnjoinCredential -Force
-                    }
-                    else 
-                    {
-                        if ($JoinOU) 
-                        {
-                            Add-Computer -DomainName $DomainName -Credential $Credential -NewName $Name -OUPath $JoinOU -Force
-                        }
-                        else 
-                        {
-                            Add-Computer -DomainName $DomainName -Credential $Credential -NewName $Name -Force
-                        }
-                    }
+                    $parameterSet.Add('NewName', $Name)
+                }
+                        
+                if ($UnjoinCredential) 
+                {
+                    $parameterSet.Add('UnjoinDomainCredential', $UnjoinCredential)
+                }
+
+                if ($JoinOU)
+                {
+                    $parameterSet.Add('OUPath', $JoinOU)
+                }
+                    
+                Add-Computer @parameterSet
+                if ($Name -ne $env:COMPUTERNAME) 
+                {
                     Write-Verbose -Message "Renamed computer to '$($Name)' and added to the domain '$($DomainName)."
                 }
                 else 
                 {
-                    # Same computer name, and join it to the domain.
-                    if ($UnjoinCredential) 
-                    {
-                        Add-Computer -DomainName $DomainName -Credential $Credential -UnjoinDomainCredential $UnjoinCredential -Force
-                    }
-                    else 
-                    {
-                        if ($JoinOU) 
-                        {
-                            Add-Computer -DomainName $DomainName -Credential $Credential -OUPath $JoinOU -Force
-                        }
-                        else 
-                        {
-                            Add-Computer -DomainName $DomainName -Credential $Credential -Force
-                        }
-                    }
-                    Write-Verbose -Message "Added computer to domain '$($DomainName)."
-                }
+                    Write-Verbose -Message "Joined computer '$Name' to the domain '$DomainName"
+                }            
             }
 
             if (-not [string]::IsNullOrWhiteSpace($Description) -and $PSBoundParameters.ContainsKey('PsDscRunAsCredential'))
@@ -302,7 +293,7 @@ function Test-TargetResource
 
     if ($DomainName)
     {
-        if (!($Credential))
+        if (-not ($Credential))
         {
             throw "Need to specify credentials with domain"
         }
