@@ -160,32 +160,36 @@ function Set-TargetResource
             }
             else 
             {
+                $parameterSet = @{
+                    Credential = $Credential
+                    WorkGroupName = $WorkGroupName
+                    Force = $true
+                }
+
                 if ($Name -ne $env:COMPUTERNAME) 
                 {
-                    # Rename the computer, and join it to the workgroup.
-                    Add-Computer -NewName $Name -Credential $Credential -WorkgroupName $WorkGroupName -Force
-                    Write-Verbose -Message "Renamed computer to '$($Name)' and addded to workgroup '$($WorkGroupName)'."
+                    $parameterSet.Add('NewName', $Name)
                 }
-                else 
-                {
-                    # Same computer name, and join it to the workgroup.
-                    Add-Computer -WorkGroupName $WorkGroupName -Credential $Credential -Force
-                    Write-Verbose -Message "Added computer to workgroup '$($WorkGroupName)'."
-                }
+                
+                # Same computer name, and join it to the workgroup.
+                Add-Computer @parameterSet
+                Write-Verbose -Message "Added computer to workgroup '$($WorkGroupName)'."
             }
         }
         elseif ($Name -ne $env:COMPUTERNAME) 
         {
+            $parameterSet = @{
+                NewName = $Name
+                Force = $true
+            }
+
             if (GetComputerDomain) 
             {
-                Rename-Computer -NewName $Name -DomainCredential $Credential -Force
-                Write-Verbose -Message "Renamed computer to '$($Name)'."
+                $parameterSet.Add('DomainCredential', $Credential)
             }
-            else 
-            {
-                Rename-Computer -NewName $Name -Force
-                Write-Verbose -Message "Renamed computer to '$($Name)'."
-            }
+            
+            Rename-Computer -NewName $Name -Force
+            Write-Verbose -Message "Renamed computer to '$($Name)'."
         }
     }
     else 
