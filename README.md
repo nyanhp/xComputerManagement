@@ -48,6 +48,7 @@ xComputer resource has following properties:
 * WorkGroupName: The name of the workgroup
 * Credential: Credential to be used to join or leave domain
 * CurrentOU: A read-only property that specifies the organizational unit that the computer account is currently in
+* Description: The description of the computer object in Active Directory as well as in system overview
 
 ## xOfflineDomainJoin
 xOfflineDomainJoin resource is a [Single Instance](https://msdn.microsoft.com/en-us/powershell/dsc/singleinstance) resource that can only be used once in a configuration and has following properties:
@@ -80,6 +81,8 @@ xPowerPlan resource has following properties:
 ## Versions
 
 ### Unreleased
+ * Added new parameter Description to xComputer
+ * Reduced cyclomatic complexity of xComputer
 
 ### 1.9.0.0
 * Added resources
