@@ -96,6 +96,11 @@ function Set-TargetResource
                 Rename-Computer -NewName $Name -DomainCredential $Credential -Force
                 Write-Verbose -Message "Renamed computer to '$($Name)'."
 
+                if (-not [string]::IsNullOrWhiteSpace($Description) -and $PSBoundParameters.ContainsKey('PsDscRunAsCredential'))
+                {
+                    Set-ComputerDescription -Name $Name -Description $Description
+                }
+
                 if (-not [string]::IsNullOrWhiteSpace($Description))
                 {
                     Get-CimInstance -ClassName Win32_OperatingSystem | Set-CimInstance -Property @{
@@ -140,21 +145,7 @@ function Set-TargetResource
 
             if (-not [string]::IsNullOrWhiteSpace($Description) -and $PSBoundParameters.ContainsKey('PsDscRunAsCredential'))
             {
-                # Set description in Active Directory
-                $domain = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().GetDirectoryEntry()
-                $searcher = [System.DirectoryServices.DirectorySearcher] $domain
-
-                # Set the search filter to an LDAP query for this machine's computer name
-                $searcher.Filter = "(sAMAccountName=$Name`$)"            
-                $results = $searcher.FindAll()
-
-                $result = $results | Select-Object -First 1
-                if ($result.Properties.Contains('description'))
-                {
-                    $null = $result.Properties['Description'].Add($Description)
-                    $null = $result.CommitChanges()
-                    Write-Verbose -Message "Successfully set description of computer object to $Description"
-                }
+                Set-ComputerDescription -Name $Name -Description $Description
             }
 
             if (-not [string]::IsNullOrWhiteSpace($Description))
@@ -393,6 +384,36 @@ function Get-ComputerOU
     }
 
     return $ou
+}
+
+function Set-ComputerDescription
+{
+    param
+    (
+        [Parameter(Mandatory)]
+        [string]
+        $Name,
+
+        [Parameter(Mandatory)]
+        [string]
+        $Description
+    )
+
+    # Set description in Active Directory
+    $domain = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().GetDirectoryEntry()
+    $searcher = [System.DirectoryServices.DirectorySearcher] $domain
+
+    # Set the search filter to an LDAP query for this machine's computer name
+    $searcher.Filter = "(sAMAccountName=$Name`$)"            
+    $results = $searcher.FindAll()
+
+    $result = $results | Select-Object -First 1
+    if ($result.Properties.Contains('description'))
+    {
+        $null = $result.Properties['Description'].Add($Description)
+        $null = $result.CommitChanges()
+        Write-Verbose -Message "Successfully set description of computer object to $Description"
+    }
 }
 
 Export-ModuleMember -Function *-TargetResource
